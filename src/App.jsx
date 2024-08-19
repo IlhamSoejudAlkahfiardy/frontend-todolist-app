@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import Swal from 'sweetalert2';
 
 import './App.css'
 import Logo from './assets/images/icons/logo.png'
@@ -9,8 +10,11 @@ import Label from './components/Label';
 import AddToDo from './components/AddToDo';
 import SaveButton from './components/SaveButton';
 import ToDoList from './components/ToDoList';
+import CheckMyTodos from './components/CheckMyTodos';
+import ListTodos from './components/ListTodos';
 
 function App() {
+  const [userTasks, setUserTasks] = useState([]);
 
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -29,9 +33,29 @@ function App() {
   };
 
   const removeToDo = (index) => {
-    const values = [...todos];
-    values.splice(index, 1);
-    setTodos(values);
+    Swal.fire({
+      title: "Apakah kamu yakin?",
+      text: "To do yang dihapus tidak dapat dikembalikan!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Ya, hapus!"
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const values = [...todos];
+        values.splice(index, 1);
+        setTodos(values);
+
+        Swal.fire({
+          title: "Berhasil!",
+          text: "To do berhasil dihapus.",
+          icon: "success"
+        });
+      }
+    });
+
+
   };
 
   const handleInputChange = (index, event) => {
@@ -52,17 +76,29 @@ function App() {
   const handleSubmit = async () => {
 
     if (!name) {
-      alert('Nama tidak boleh kosong');
+      Swal.fire({
+        title: "",
+        text: "Nama tidak boleh kosong!",
+        icon: "warning"
+      });
       return;
     }
 
     if (!username) {
-      alert('Username tidak boleh kosong');
+      Swal.fire({
+        title: "",
+        text: "Username tidak boleh kosong!",
+        icon: "warning"
+      });
       return;
     }
 
     if (!isEmail(email)) {
-      alert('Email tidak valid');
+      Swal.fire({
+        title: "",
+        text: "Email tidak valid!",
+        icon: "warning"
+      });
       return;
     }
 
@@ -87,13 +123,13 @@ function App() {
               description: todos[i].description,
               category_id: todos[i].category_id,
             })
-            .then((response) => {
-              console.log(response);
-            })
-            
-            .catch((error) => {
-              console.log(error);
-            })
+              .then((response) => {
+                console.log(response);
+              })
+
+              .catch((error) => {
+                console.log(error);
+              })
           }
         })
         .catch((error) => {
@@ -101,11 +137,91 @@ function App() {
         });
 
 
-      alert('To Do List berhasil ditambahkan');
+      Swal.fire({
+        title: "Berhasil",
+        text: "To do berhasil ditambahkan!",
+        icon: "success"
+      });
     } catch (error) {
+      Swal.fire({
+        title: "Gagal",
+        text: "To do gagal ditambahkan!",
+        icon: "error"
+      });
       console.error('To Do List gagal ditambahkan', error);
     }
   };
+
+  const handleCheckMyTodos = async () => {
+
+    try {
+      console.log(name, username, email);
+
+      await axios.get('http://localhost:8000/api/getMyTodos', {
+        params: {
+          name: name,
+          username: username,
+          email: email
+        },
+      }, {
+        headers: {
+          'X-XSRF-TOKEN': csrfToken,
+        }
+      })
+        .then((response) => {
+          console.log(response.data.dataTasks);
+          setUserTasks(response.data.dataTasks);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    } catch (error) {
+      console.error('To Do List gagal ditemukan', error);
+    }
+  }
+
+  const handleDeleteTodo = async (index) => {
+    Swal.fire({
+      title: "Apakah kamu yakin?",
+      text: "To do yang dihapus tidak dapat dikembalikan!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Ya, hapus!"
+    }).then(async (result) => {
+
+      if (result.isConfirmed) {
+        try {
+          await axios.delete('http://localhost:8000/api/deleteTodo', {
+            params: {
+              task_id: userTasks[index].id
+            },
+            headers: {
+              'X-XSRF-TOKEN': csrfToken,
+            }
+          })
+            .then((response) => {
+              console.log(response);
+              const values = [...userTasks];
+              values.splice(index, 1);
+              setUserTasks(values);
+
+              Swal.fire({
+                title: "Berhasil!",
+                text: "To do berhasil dihapus.",
+                icon: "success"
+              });
+            })
+            .catch((error) => {
+              console.log(error);
+            });
+        } catch (error) {
+          console.error('To Do List gagal dihapus', error);
+        }
+      }
+    })
+  }
 
   return (
     <div className='w-screen min-h-screen flex justify-center py-24 bg-stone-100'>
@@ -173,9 +289,26 @@ function App() {
           </div>
 
           {/* Tombol Simpan */}
-          <div className='w-full '>
+          <div className='w-full flex flex-col gap-2'>
             <SaveButton handleSubmit={handleSubmit} />
+            <CheckMyTodos
+              handleCheckMyTodos={handleCheckMyTodos}
+            />
           </div>
+
+          {userTasks.length > 0 && (
+            <>
+              <div className='w-full flex justify-between items-center'>
+                <p className='text-zinc-900 text-2xl font-medium'>My To Do List</p>
+              </div>
+
+              <div className='w-full flex flex-col gap-5 px-3'>
+                {userTasks.map((task, index) => (
+                  <ListTodos data={task} index={index} handleDeleteTodo={handleDeleteTodo} />
+                ))}
+              </div>
+            </>
+          )}
 
         </div>
       </div>
